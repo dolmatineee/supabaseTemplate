@@ -1,12 +1,29 @@
 package com.example.myapplication
 
 import android.content.Context
+import android.util.Log
+import android.widget.Toast
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import io.github.jan.supabase.auth.Auth
+import io.github.jan.supabase.auth.OtpType
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.createSupabaseClient
-import io.github.jan.supabase.gotrue.Auth
 import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Count
+import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.serializer.KotlinXSerializer
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 
 class SupabaseClient : ViewModel() {
@@ -22,100 +39,19 @@ class SupabaseClient : ViewModel() {
         defaultSerializer = KotlinXSerializer(Json)
     }
 
-    fun signUp(
-        context: Context,
-        userEmail: String,
-        userPassword: String,
-        userFullName: String,
-        userPhone: String,
-        userDate: String
-    ) {
-        viewModelScope.launch {
-            try {
-                supabase.auth.signUpWith(Email) {
-                    email = userEmail
-                    password = userPassword
-                    data = buildJsonObject {
-                        put("full_name", userFullName)
-                        put("phone_number", userPhone)
-                        put("date_of_birth", userDate)
-                    }
-                }
-                val user = User(
-                    uid = supabase.auth.currentUserOrNull()!!.id,
-                    name = userFullName,
-                    phone = userPhone,
-                    date_of_birth = userDate
-                )
-                supabase.from("User").insert(user)
-                saveToken(context)
-                _userState.value = UserState.Success("Успешная регистрация!")
-            } catch (e: Exception) {
-                _userState.value = UserState.Error("Ошибка: ${e.message}")
-            }
-        }
-    }
+    private val _sneakers = MutableLiveData<List<Sneaker>>()
+    val sneakers: LiveData<List<Sneaker>> get() = _sneakers
 
-    fun login(
-        context: Context,
-        userEmail: String,
-        userPassword: String
-    ) {
-        viewModelScope.launch {
-            try {
-                supabase.auth.signInWith(Email) {
-                    email = userEmail
-                    password = userPassword
-                }
-                saveToken(context)
-                _userState.value = UserState.Success("Успешная авторизация!")
-            } catch (e: Exception) {
-                _userState.value = UserState.Error("Ошибка: ${e.message}")
-            }
-        }
-    }
+    private val _photos = MutableLiveData<Map<Int, String>>()
+    val photos: LiveData<Map<Int, String>> get() = _photos
 
-    fun sendEmailOtp(
-        userEmail: String
-    ) {
+    fun loadSneakers() {
         viewModelScope.launch {
-            try {
-                supabase.auth.resetPasswordForEmail(userEmail)
-                _userState.value = UserState.Success("Успешно")
-            } catch (e: Exception) {
-                _userState.value = UserState.Error("Ошибка: ${e.message}")
-            }
-        }
-    }
-
-    fun checkOtp(
-        code: String,
-        userEmail: String
-    ) {
-        viewModelScope.launch {
-            try {
-                supabase.auth.verifyEmailOtp(
-                    type = OtpType.Email.RECOVERY,
-                    email = userEmail,
-                    token = code
-                )
-                _userState.value = UserState.Success("Успешно")
-            } catch (e: Exception) {
-                _userState.value = UserState.Error("Ошибка: ${e.message}")
-            }
-        }
-    }
-
-    fun updatePassword(userPassword: String) {
-        viewModelScope.launch {
-            try {
-                supabase.auth.updateUser {
-                    password = userPassword
-                }
-                _userState.value = UserState.Success("Успешно")
-            } catch (e: Exception) {
-                _userState.value = UserState.Error("Ошибка: ${e.message}")
-            }
+            val sneakers = supabase.from("sneakers").select().decodeList<Sneaker>()
+            val photos = supabase.from("sneaker_photos").select().decodeList<SneakerPhoto>()
+            val photoMap = photos.associate { it.sneaker_id to it.photo_url }
+            _sneakers.value = sneakers
+            _photos.value = photoMap
         }
     }
 

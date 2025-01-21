@@ -1,6 +1,6 @@
 [versions]
 agp = "8.7.3"
-authKt = "3.0.2"
+authKt = "3.0.3"
 glide = "4.15.1"
 kotlin = "2.0.0"
 coreKtx = "1.15.0"
